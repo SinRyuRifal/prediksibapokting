@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 
 # Konfigurasi halaman
-st.set_page_config(page_title="Prediksi Harga Bapokting", layout="wide")
+st.set_page_config(page_title="Prediksi Harga Bapokting Cek", layout="wide")
 
 # Judul
 st.title("📈 Prediksi Harga Bahan Pokok (LSTM)")
