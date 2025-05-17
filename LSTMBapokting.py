@@ -29,8 +29,16 @@ with st.sidebar:
         return df.to_csv(index=False).encode("utf-8")
 
     template_df = pd.DataFrame(columns=["Tanggal"] + selected_columns)
-    csv = convert_df_to_csv(template_df)
-    st.download_button("📄 Unduh Template CSV", data=csv, file_name="template_bapokting.csv", mime="text/csv")
+    output = BytesIO()
+    template_df.to_excel(output, index=False)
+    output.seek(0)
+
+    st.download_button(
+        label="📄 Unduh Template Excel",
+        data=output,
+        file_name="template_bapokting.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
     uploaded_file = st.file_uploader("📤 Unggah File CSV", type=["csv", "xlsx"])
 
