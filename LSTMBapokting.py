@@ -40,7 +40,7 @@ with st.sidebar:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    uploaded_file = st.file_uploader("📤 Unggah File CSV", type=["csv", "xlsx"])
+    uploaded_file = st.file_uploader("📤 Unggah File", type=["csv", "xlsx"])
 
 # Proses jika file diunggah
 if uploaded_file is not None:
