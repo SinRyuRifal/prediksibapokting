@@ -65,10 +65,10 @@ if uploaded_file is not None:
             scaler = MinMaxScaler()
             scaled_data = scaler.fit_transform(data)
 
-            sequence_length = 30
+            sequence_length = 7
             input_sequence = scaled_data[-sequence_length:][np.newaxis, :, :]
 
-            model = load_model("lstm_bapokting.keras")
+            model = load_model("lstm_bapokting2.keras")
             n_future = 30
             predictions_scaled = []
 
