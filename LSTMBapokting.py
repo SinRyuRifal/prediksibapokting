@@ -8,82 +8,104 @@ from io import BytesIO
 
 # Konfigurasi halaman
 st.set_page_config(page_title="Prediksi Harga Bapokting", layout="wide")
-
-# Judul
 st.title("📈 Prediksi Harga Bahan Pokok (LSTM)")
 
 # Kolom yang digunakan
-selected_columns = [
+SELECTED_COLUMNS = [
     'Beras Premium', 'Beras Medium', 'Bawang Merah', 'Bawang Putih Bonggol',
     'Cabai Merah Keriting', 'Daging Sapi Murni', 'Cabai Rawit Merah',
     'Daging Ayam Ras', 'Telur Ayam Ras', 'Gula Konsumsi',
     'Minyak Goreng Kemasan'
 ]
 
-# Unduh template
+# Kelas utama
+class LSTMBapoktingPredictor:
+    def __init__(self, file):
+        self.file = file
+        self.df = None
+        self.model = load_model("lstm_bapokting2.keras")
+        self.scaler = MinMaxScaler()
+        self.n_future = 30
+        self.sequence_length = 7
+
+    def load_data(self):
+        if self.file.name.endswith(".csv"):
+            self.df = pd.read_csv(self.file, parse_dates=["Tanggal"])
+        else:
+            self.df = pd.read_excel(self.file, parse_dates=["Tanggal"])
+        self.df.set_index("Tanggal", inplace=True)
+
+    def validate_data(self):
+        if not all(col in self.df.columns for col in SELECTED_COLUMNS):
+            return False, "❌ File harus mengandung kolom berikut: " + ", ".join(SELECTED_COLUMNS)
+        if len(self.df) < 30:
+            return False, "❌ Data minimal harus berisi 30 baris!"
+        return True, "✅ Data berhasil diunggah dan valid!"
+
+    def predict(self):
+        data = self.df[SELECTED_COLUMNS].dropna()
+        scaled_data = self.scaler.fit_transform(data)
+        input_seq = scaled_data[-self.sequence_length:][np.newaxis, :, :]
+
+        preds_scaled = []
+        for _ in range(self.n_future):
+            next_pred = self.model.predict(input_seq, verbose=0)[0]
+            preds_scaled.append(next_pred)
+            input_seq = np.vstack([input_seq[0, 1:], next_pred])[np.newaxis, :, :]
+
+        preds = self.scaler.inverse_transform(np.array(preds_scaled))
+        preds = np.round(preds).astype(int)
+        future_dates = pd.date_range(start=self.df.index[-1] + pd.Timedelta(days=1), periods=self.n_future)
+        return pd.DataFrame(preds, columns=SELECTED_COLUMNS, index=future_dates)
+
+    def plot_predictions(self, forecast_df):
+        fig, axes = plt.subplots(6, 2, figsize=(20, 25))
+        axes = axes.flatten()
+        for i, col in enumerate(SELECTED_COLUMNS):
+            ax = axes[i]
+            ax.plot(self.df.index[-self.sequence_length:], self.df[col][-self.sequence_length:], label="Aktual", color="blue", marker='o')
+            ax.plot(forecast_df.index, forecast_df[col], label="Prediksi", color="orange", marker='o')
+            ax.set_title(col)
+            ax.tick_params(axis='x', rotation=45)
+            ax.grid(True)
+            ax.legend()
+        plt.tight_layout()
+        return fig
+
+# Sidebar
 st.sidebar.header("📥 Template & Upload")
 st.sidebar.markdown("Dataset minimal berisi 30 baris data")
 
 with st.sidebar:
-    def convert_df_to_csv(df):
-        return df.to_csv(index=False).encode("utf-8")
-
-    template_df = pd.DataFrame(columns=["Tanggal"] + selected_columns)
-    output = BytesIO()
-    template_df.to_excel(output, index=False)
-    output.seek(0)
+    def download_template():
+        template_df = pd.DataFrame(columns=["Tanggal"] + SELECTED_COLUMNS)
+        output = BytesIO()
+        template_df.to_excel(output, index=False)
+        output.seek(0)
+        return output
 
     st.download_button(
         label="📄 Unduh Template Excel",
-        data=output,
+        data=download_template(),
         file_name="template_bapokting.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
     uploaded_file = st.file_uploader("📤 Unggah File", type=["csv", "xlsx"])
 
-# Proses jika file diunggah
+# Proses prediksi
 if uploaded_file is not None:
-    # Baca file
     try:
-        if uploaded_file.name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file, parse_dates=["Tanggal"])
+        predictor = LSTMBapoktingPredictor(uploaded_file)
+        predictor.load_data()
+        valid, message = predictor.validate_data()
+
+        if not valid:
+            st.error(message)
         else:
-            df = pd.read_excel(uploaded_file, parse_dates=["Tanggal"])
-        df.set_index("Tanggal", inplace=True)
+            st.success(message)
 
-        # Validasi kolom dan panjang data
-        if not all(col in df.columns for col in selected_columns):
-            st.error("❌ File harus mengandung kolom berikut: " + ", ".join(selected_columns))
-        elif len(df) < 30:
-            st.error("❌ Data minimal harus berisi 30 baris!")
-        else:
-            st.success("✅ Data berhasil diunggah dan valid!")
-
-            # Lanjutkan prediksi
-            data = df[selected_columns].dropna()
-            scaler = MinMaxScaler()
-            scaled_data = scaler.fit_transform(data)
-
-            sequence_length = 7
-            input_sequence = scaled_data[-sequence_length:][np.newaxis, :, :]
-
-            model = load_model("lstm_bapokting2.keras")
-            n_future = 30
-            predictions_scaled = []
-
-            for _ in range(n_future):
-                next_pred = model.predict(input_sequence, verbose=0)[0]
-                predictions_scaled.append(next_pred)
-                input_sequence = np.vstack([input_sequence[0, 1:], next_pred])[np.newaxis, :, :]
-
-            predictions_scaled = np.array(predictions_scaled)
-            predictions = scaler.inverse_transform(predictions_scaled)
-            predictions = np.round(predictions).astype(int)
-
-            last_date = df.index[-1]
-            future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=n_future)
-            forecast_df = pd.DataFrame(predictions, columns=selected_columns, index=future_dates)
+            forecast_df = predictor.predict()
 
             st.subheader("📊 Hasil Prediksi 30 Hari ke Depan")
             st.dataframe(forecast_df)
@@ -100,19 +122,7 @@ if uploaded_file is not None:
 
             # Visualisasi
             st.subheader("📉 Visualisasi Prediksi")
-            fig, axes = plt.subplots(6, 2, figsize=(20, 25))
-            axes = axes.flatten()
-
-            for i, col in enumerate(selected_columns):
-                ax = axes[i]
-                ax.plot(df.index[-sequence_length:], df[col][-sequence_length:], label="Aktual", color="blue", marker='o')
-                ax.plot(forecast_df.index, forecast_df[col], label="Prediksi", color="orange", marker='o')
-                ax.set_title(col)
-                ax.tick_params(axis='x', rotation=45)
-                ax.grid(True)
-                ax.legend()
-
-            plt.tight_layout()
+            fig = predictor.plot_predictions(forecast_df)
             st.pyplot(fig)
 
     except Exception as e:
