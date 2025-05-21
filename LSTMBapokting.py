@@ -6,11 +6,9 @@ from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 from io import BytesIO
 
-# Konfigurasi halaman
 st.set_page_config(page_title="Prediksi Harga Bapokting", layout="wide")
 st.title("📈 Prediksi Harga Bahan Pokok (LSTM)")
 
-# Kolom yang digunakan
 SELECTED_COLUMNS = [
     'Beras Premium', 'Beras Medium', 'Bawang Merah', 'Bawang Putih Bonggol',
     'Cabai Merah Keriting', 'Daging Sapi Murni', 'Cabai Rawit Merah',
@@ -18,7 +16,6 @@ SELECTED_COLUMNS = [
     'Minyak Goreng Kemasan'
 ]
 
-# Kelas utama
 class LSTMBapoktingPredictor:
     def __init__(self, file):
         self.file = file
@@ -37,10 +34,10 @@ class LSTMBapoktingPredictor:
 
     def validate_data(self):
         if not all(col in self.df.columns for col in SELECTED_COLUMNS):
-            return False, "❌ File harus mengandung kolom berikut: " + ", ".join(SELECTED_COLUMNS)
+            return False, "File harus mengandung kolom berikut: " + ", ".join(SELECTED_COLUMNS)
         if len(self.df) < 30:
-            return False, "❌ Data minimal harus berisi 30 baris!"
-        return True, "✅ Data berhasil diunggah dan valid!"
+            return False, "Data minimal harus berisi 30 baris!"
+        return True, "Data berhasil diunggah dan valid!"
 
     def predict(self):
         data = self.df[SELECTED_COLUMNS].dropna()
@@ -59,8 +56,11 @@ class LSTMBapoktingPredictor:
         return pd.DataFrame(preds, columns=SELECTED_COLUMNS, index=future_dates)
 
     def plot_predictions(self, forecast_df):
-        fig, axes = plt.subplots(6, 2, figsize=(20, 25))
+        total_plots = len(SELECTED_COLUMNS)
+        rows = (total_plots + 1) // 2  # 2 kolom per baris
+        fig, axes = plt.subplots(rows, 2, figsize=(20, 5 * rows))
         axes = axes.flatten()
+
         for i, col in enumerate(SELECTED_COLUMNS):
             ax = axes[i]
             ax.plot(self.df.index[-self.sequence_length:], self.df[col][-self.sequence_length:], label="Aktual", color="blue", marker='o')
@@ -69,10 +69,14 @@ class LSTMBapoktingPredictor:
             ax.tick_params(axis='x', rotation=45)
             ax.grid(True)
             ax.legend()
+
+        # Nonaktifkan sisa axes jika ada
+        for j in range(total_plots, len(axes)):
+            axes[j].axis("off")
+
         plt.tight_layout()
         return fig
 
-# Sidebar
 st.sidebar.header("📥 Template & Upload")
 st.sidebar.markdown("Dataset minimal berisi 30 baris data")
 
@@ -110,7 +114,6 @@ if uploaded_file is not None:
             st.subheader("📊 Hasil Prediksi 30 Hari ke Depan")
             st.dataframe(forecast_df)
 
-            # Unduh hasil prediksi
             output = BytesIO()
             forecast_df.to_excel(output)
             st.download_button(
@@ -120,7 +123,6 @@ if uploaded_file is not None:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            # Visualisasi
             st.subheader("📉 Visualisasi Prediksi")
             fig = predictor.plot_predictions(forecast_df)
             st.pyplot(fig)
